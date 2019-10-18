@@ -23,9 +23,9 @@ a = AG.AG_engine(c=10, c2=5, alpha=.4)
 
 # Instantiate dataset
 d = dataset.DatasetSampledFromFile(nickname=nickname, 
-                                     sample_to_scale=sample, 
-                                     reduce_to_dom_shape=domain, 
-                                     seed=111)
+                                   sample_to_scale=sample, 
+                                   reduce_to_dom_shape=domain, 
+                                   seed=111)
 
 # Instantiate workload
 w = workload.RandomRange(shape_list=shape_list, 

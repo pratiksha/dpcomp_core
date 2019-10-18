@@ -4,6 +4,7 @@ from builtins import range
 import hashlib
 import os
 import numpy
+import pandas as pd
 from dpcomp_core import util
 from dpcomp_core.mixins import Marshallable
 from functools import reduce
@@ -41,7 +42,10 @@ filenameDict = {
     "MDSALARY-OVERT"    : '2D/MDSalary2D_256_256.npy',
     "LOAN-FUNDED-INCOME": '2D/Loan_2D_256_256.npy',
     "STROKE"            : '2D/Stroke_2D_256_256.npy',
-    "TWITTER"           : '2D/twitter_256_256.npy'
+    "TWITTER"           : '2D/twitter_256_256.npy',
+
+    # Hillview data
+    "ONTIME" : 'ontime_private/2018_1.csv',
     }
 
 
@@ -188,20 +192,40 @@ class DatasetSampledFromFile(DatasetSampled):
         dist = util.old_div(hist, float(hist.sum()))
         super(DatasetSampledFromFile,self).__init__(dist, sample_to_scale, reduce_to_dom_shape, seed)
 
+'''
+Compute a histogram from an underlying CSV file of un-aggregated data points. 
+The parameter `bounds` is a list of (min, max, binsize) tuples that specifies the bin values for each
+desired column.
+'''
+class DatasetFromRaw(Dataset):
 
+    def __init__(self, nickname, sample_to_scale, colnames, bounds, reduce_to_dom_shape=None):
+        assert(len(colnames) in [1, 2])
+        assert(len(bounds) == len(colnames))
+        
+        self.fname = nickname
+        assert nickname in filenameDict, 'Filename parameter not recognized: %s' % nickname
+        rows = load_csv(filenameDict[self.fname], colnames)
+        hist = rows_to_hist(rows, bounds)
+        print(hist)
+        super(DatasetFromRaw, self).__init__(hist, reduce_to_dom_shape, None)
 
+        
+tryPaths = [os.path.join(os.environ['DPCOMP_CORE'], 'dpcomp_core/datafiles'),
+            os.environ['HILLVIEW_DATA_DIR']]
 
-tryPaths = [os.path.join(os.environ['DPCOMP_CORE'], 'dpcomp_core')]
-
-
-def load(filename):
+def get_path(filename):
     """
     Load from file and return original counts (should be integral)
     """
-    path = [p for p in tryPaths if os.path.exists(p)]
-    assert path, 'data path not found.'
+    filepaths = [os.path.join(p, filename) for p in tryPaths]
+    valid_paths = [p for p in filepaths if os.path.exists(p)]
+    assert valid_paths, 'data path not found.'
 
-    fullpath = os.path.join( path[0], 'datafiles', filename )	# fixed for now, so we don't have to include as a parameter in automated key extraction stuff...
+    return valid_paths[0]
+
+def load(filename):
+    fullpath = get_path(filename)
     _, file_extension = os.path.splitext(fullpath)
     if file_extension == '.txt':
         x = []
@@ -214,6 +238,28 @@ def load(filename):
     else:
         raise Exception('Unrecognized file extension')
 
+
+'''
+Create a 1- or 2-d non-private histogram from the rows.
+'''
+def rows_to_hist(rows, bounds):
+    if len(bounds) == 1:
+        (min_, max_, binsize) = bounds[0]
+        nbins = int((max_ - min_) / float(binsize))
+        return numpy.histogram(rows, bins=nbins, range=(min_, max_))[0] # second element is bin labels
+
+    else:
+        raise NotImplementedError('Unsupported number of columns for histogram')
+
+'''
+Load raw CSV data where each row corresponds to an individual, selecting columns specified by colnames.
+'''
+def load_csv(csv_fname, colnames):
+    full_fname = get_path(csv_fname)
+    df = pd.read_csv(full_fname, delimiter=',')
+    assert(x in df.columns for x in colnames)
+    arr = df[colnames]
+    return arr
 
 def subSample(dist, sampleSize, prng):
     ''' Generate a subsample of given sampleSize from an input distribution '''

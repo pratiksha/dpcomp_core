@@ -127,6 +127,45 @@ class Prefix1D(Workload):
         m.update(util.prepare_for_hash(str(util.standardize(self.domain_shape))))
         return m.hexdigest()
 
+class Histogram(Workload):
+    """ 
+    Workloads of 1- and 2-d range queries on histograms. nbuckets_per_dim is a list of 
+    length len(domain_bounds) that specifies the number of buckets per dimension.
+    """
+
+    def __init__(self, domain_bounds, nbuckets_per_dim, pretty_name='Histogram'):
+        assert(len(domain_bounds) in [1, 2])
+
+        self.init_params = util.init_params_from_locals(locals())
+
+        self.pretty_name = pretty_name
+
+        bucket_bounds = [[int(x) for x in numpy.linspace(x[0], x[1]-1, b)]
+                         for x, b in zip(domain_bounds, nbuckets_per_dim)]
+        buckets = [[(x[i], x[i+1]) for i in range(len(x)-1)]
+                   for x in bucket_bounds]
+        print(buckets)
+        all_buckets = list(itertools.product(*buckets))
+        all_queries = [tuple(zip(*x)) for x in all_buckets]
+            
+        queries = [ndRangeUnion().addRange(x[0], x[1], 1.0) for x in all_queries]
+        print(queries)
+
+        domain_shape = tuple([(x[1]-x[0]) for x in domain_bounds])
+        super(self.__class__,self).__init__(queries, domain_shape)
+
+    def __repr__(self):
+        r = self.__class__.__name__ + '('
+        r += 'domain_shape_int=' + str(self.domain_shape[0]) + ')'
+        return r
+
+    @property
+    def hash(self):
+        m = hashlib.sha1()
+        m.update(util.prepare_for_hash(self.__class__.__name__))
+        m.update(util.prepare_for_hash(str(util.standardize(self.domain_shape))))
+        return m.hexdigest()
+
 
 class RandomRange(Workload):
     ''' Generate m random n-dim queries, selected uniformly from list of shapes and placed randomly in n-dim domain
