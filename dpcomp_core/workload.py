@@ -49,7 +49,7 @@ class Workload(Marshallable):
             self._matrix[i,:] = row
 
         return self._matrix
-
+        
     def sensitivity(self):
         # copied from utilities.py
         ''' Compute sensitivity of a collection of ndRangeUnion queries '''
@@ -144,12 +144,10 @@ class Histogram(Workload):
                          for x, b in zip(domain_bounds, nbuckets_per_dim)]
         buckets = [[(x[i], x[i+1]) for i in range(len(x)-1)]
                    for x in bucket_bounds]
-        print(buckets)
         all_buckets = list(itertools.product(*buckets))
         all_queries = [tuple(zip(*x)) for x in all_buckets]
             
         queries = [ndRangeUnion().addRange(x[0], x[1], 1.0) for x in all_queries]
-        print(queries)
 
         domain_shape = tuple([(x[1]-x[0]) for x in domain_bounds])
         super(self.__class__,self).__init__(queries, domain_shape)
@@ -166,7 +164,31 @@ class Histogram(Workload):
         m.update(util.prepare_for_hash(str(util.standardize(self.domain_shape))))
         return m.hexdigest()
 
+class AllBuckets(Workload):
+    """
+    Generate all possible interval queries for the range.
+    """
+    def __init__(self, domain_bounds, pretty_name='Histogram'):
+        assert(len(domain_bounds) in [1, 2])
 
+        self.init_params = util.init_params_from_locals(locals())
+
+        self.pretty_name = pretty_name
+
+        ranges = [numpy.arange(x[0], x[1]) for x in domain_bounds]
+        print(ranges)
+
+        pairs = [[x for x in itertools.product(r, r) if x[0] < x[1]] for r in ranges]
+        all_queries = list(itertools.product(*pairs))
+        all_queries = [tuple(zip(*x)) for x in all_queries]
+        print(all_queries)
+        
+        queries = [ndRangeUnion().addRange(x[0], x[1], 1.0) for x in all_queries]
+        print(queries)
+        
+        domain_shape = tuple([(x[1]-x[0]) for x in domain_bounds])
+        super(self.__class__,self).__init__(queries, domain_shape)
+    
 class RandomRange(Workload):
     ''' Generate m random n-dim queries, selected uniformly from list of shapes and placed randomly in n-dim domain
         shape_list: list of shape tuples

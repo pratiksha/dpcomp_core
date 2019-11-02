@@ -60,7 +60,6 @@ class H2_engine(estimate_engine.estimate_engine):
 
         return np.array(build_tree(x, epsilon,prng))
 
-
 '''
 Technique from Qardaji et al. PVLDB 2013.
 '''
@@ -99,7 +98,7 @@ def build_tree(x, epsilon,prng, b=2):
     epsilon = util.old_div(float(epsilon), H.height)  # uniform allocation
     for node in H.postorder_iter():
         node.noisy = node.count + prng.laplace(0, util.old_div(1,epsilon))
-    
+
     est_x = H.inference()
     return est_x[:n]  # truncate any padded zeros
 
