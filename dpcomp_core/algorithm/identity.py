@@ -24,4 +24,5 @@ class identity_engine(estimate_engine.estimate_engine):
 
         prng = numpy.random.RandomState(seed)
 
-        return x + prng.laplace(0.0, util.old_div(1.0, epsilon), x.shape)
+        ident = x + prng.laplace(0.0, util.old_div(1.0, epsilon), x.shape)
+        return ident

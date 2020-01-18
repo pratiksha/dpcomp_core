@@ -9,6 +9,7 @@ from dpcomp_core.mixins import Marshallable
 from dpcomp_core.query_nd_union import ndRangeUnion
 from dpcomp_core import util
 
+from tqdm import tqdm
 
 """
 These classes define workloads
@@ -66,6 +67,15 @@ class Workload(Marshallable):
     def evaluate(self, x):
         return numpy.dot(self.matrix, x.ravel())
 
+    def evaluate_iter(self, x):
+        result_vec = []
+        rx = x.ravel()
+        for i, q in enumerate(tqdm(self.query_list)):
+            arrq = q.asArray(self.domain_shape).flatten()
+            result_vec.append(numpy.dot(arrq, rx))
+
+        return numpy.array(result_vec)
+    
     @property
     def key(self):
         """ Using leading 8 characters of hash as key for now """
@@ -176,15 +186,13 @@ class AllBuckets(Workload):
         self.pretty_name = pretty_name
 
         ranges = [numpy.arange(x[0], x[1]) for x in domain_bounds]
-        print(ranges)
-
-        pairs = [[x for x in itertools.product(r, r) if x[0] < x[1]] for r in ranges]
+        
+        pairs = [[x for x in itertools.product(r, r) if (x[0] <= x[1])] for r in ranges]
         all_queries = list(itertools.product(*pairs))
         all_queries = [tuple(zip(*x)) for x in all_queries]
-        print(all_queries)
+        print('Num intervals:', len(all_queries))
         
         queries = [ndRangeUnion().addRange(x[0], x[1], 1.0) for x in all_queries]
-        print(queries)
         
         domain_shape = tuple([(x[1]-x[0]) for x in domain_bounds])
         super(self.__class__,self).__init__(queries, domain_shape)

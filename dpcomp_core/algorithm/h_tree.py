@@ -86,7 +86,7 @@ class HTree(object):
 
         self.root = nodes[0]
         self.height = height
-
+        
     def __repr__(self):
         return '\n'.join([x.__repr__() for x in self.postorder_iter()])
 
@@ -123,6 +123,9 @@ class HTree(object):
         return leaves
 
     def inference(self):
+        if self.height == 1:
+            return [self.root.noisy]
+        
         k = self.k
         # go bottom up to compute z[v]
         for (node, h) in self.postorder_iter(with_height=True):
@@ -153,7 +156,7 @@ class HTree(object):
         assert reduce(lambda total, leaf_count: (
             leaf_count == None) + total, leaves, 0) == 0
         return leaves
-
+    
     def postorder_iter(self, with_height=False):
         stack = [(self.root, 0, self.height)]
         while stack:

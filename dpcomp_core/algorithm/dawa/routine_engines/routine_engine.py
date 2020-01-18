@@ -201,7 +201,7 @@ class transform_engine_qtqmatrix(routine_engine):
         max_block_size - the max number of rows to be materialized
                          when computing Q^TQ. Set to n if omitted.
         """
-
+        
         if isinstance(Q0, workload.Workload):
             Q0 = Q0.query_list
         n = partition[-1][-1] + 1

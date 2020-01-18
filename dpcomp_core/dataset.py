@@ -197,19 +197,38 @@ Compute a histogram from an underlying CSV file of un-aggregated data points.
 The parameter `bounds` is a list of (min, max, binsize) tuples that specifies the bin values for each
 desired column.
 '''
-class DatasetFromRaw(Dataset):
-
-    def __init__(self, nickname, sample_to_scale, colnames, bounds, reduce_to_dom_shape=None):
+class DoubleDatasetFromRaw(Dataset):
+    def __init__(self, nickname, colnames, bounds, reduce_to_dom_shape=None):
         assert(len(colnames) in [1, 2])
         assert(len(bounds) == len(colnames))
         
         self.fname = nickname
         assert nickname in filenameDict, 'Filename parameter not recognized: %s' % nickname
         rows = load_csv(filenameDict[self.fname], colnames)
-        hist = rows_to_hist(rows, bounds)
+        hist = double_rows_to_hist(rows, bounds)
         print(hist)
-        super(DatasetFromRaw, self).__init__(hist, reduce_to_dom_shape, None)
+        super(DoubleDatasetFromRaw, self).__init__(hist, reduce_to_dom_shape, None)
 
+class StringDatasetFromRaw(Dataset):
+    def __init__(self, nickname, colnames, left_bounds, reduce_to_dom_shape=None):
+        assert(len(colnames) in [1, 2])
+        assert(len(left_bounds) == len(colnames))
+        
+        self.fname = nickname
+        assert nickname in filenameDict, 'Filename parameter not recognized: %s' % nickname
+        rows = load_csv(filenameDict[self.fname], colnames)
+        hist = string_rows_to_hist(rows, left_bounds)
+        super(StringDatasetFromRaw, self).__init__(hist, reduce_to_dom_shape, None)
+        
+'''
+Dummy dataset with zero counts and the specified shape.
+'''
+class AllZerosDataset(Dataset):
+
+    def __init__(self, shape, reduce_to_dom_shape=None):
+        hist = numpy.zeros(shape)
+        self.fname = ""
+        super(AllZerosDataset, self).__init__(hist, reduce_to_dom_shape, None)
         
 tryPaths = [os.path.join(os.environ['DPCOMP_CORE'], 'dpcomp_core/datafiles'),
             os.environ['HILLVIEW_DATA_DIR']]
@@ -242,15 +261,47 @@ def load(filename):
 '''
 Create a 1- or 2-d non-private histogram from the rows.
 '''
-def rows_to_hist(rows, bounds):
+def double_rows_to_hist(rows, bounds):
+    print(rows)
     if len(bounds) == 1:
+        # 1D histogram
         (min_, max_, binsize) = bounds[0]
         nbins = int((max_ - min_) / float(binsize))
         return numpy.histogram(rows, bins=nbins, range=(min_, max_))[0] # second element is bin labels
-
     else:
         raise NotImplementedError('Unsupported number of columns for histogram')
 
+'''
+Find the bin index for this value
+'''
+def binary_search(val, left_bounds):
+    hi = len(left_bounds)
+    lo = 0
+    while (lo <= hi):
+        mid = lo + ((hi - lo) // 2)
+        if val == left_bounds[mid]:
+            return mid
+        if val < left_bounds[mid]:
+            hi = mid - 1
+        elif val > left_bounds[mid]:
+            lo = mid + 1
+    return -1
+    
+def string_rows_to_hist(rows, left_bounds):
+    if len(left_bounds) == 1:
+        lb = left_bounds[0]
+        
+        # 1D histogram
+        ret = numpy.zeros(len(lb))
+        for r in rows:
+            idx = binary_search(r, lb)
+            if idx == -1:
+                continue
+            ret[idx] += 1
+        return ret
+    else:
+        raise NotImplementedError('Unsupported number of columns for histogram')
+    
 '''
 Load raw CSV data where each row corresponds to an individual, selecting columns specified by colnames.
 '''
@@ -258,7 +309,7 @@ def load_csv(csv_fname, colnames):
     full_fname = get_path(csv_fname)
     df = pd.read_csv(full_fname, delimiter=',')
     assert(x in df.columns for x in colnames)
-    arr = df[colnames]
+    arr = df[colnames].values
     return arr
 
 def subSample(dist, sampleSize, prng):

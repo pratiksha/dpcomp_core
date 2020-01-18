@@ -83,9 +83,8 @@ def variance(N, b):
     and branchng factor b.  Equation 3 from paper.'''
     h = math.ceil(math.log(N, b))
     return ( ((b - 1) * h**3) - (util.old_div((2 * (b+1) * h**2), 3)))
-
+    
 def build_tree(x, epsilon,prng, b=2):
-
     # tree code requires len(x) be a power of b
     # if it is not, then pad x with 0s and then remove at end
     n = len(x)
@@ -95,12 +94,10 @@ def build_tree(x, epsilon,prng, b=2):
     H = h_tree.HTree(b, x)
 
     # add noise
+    print("Scale:", H.height)
     epsilon = util.old_div(float(epsilon), H.height)  # uniform allocation
     for node in H.postorder_iter():
         node.noisy = node.count + prng.laplace(0, util.old_div(1,epsilon))
-
+        
     est_x = H.inference()
     return est_x[:n]  # truncate any padded zeros
-
-
-
