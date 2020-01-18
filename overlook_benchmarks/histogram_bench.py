@@ -15,6 +15,34 @@ from read_metadata import load_schema, load_metadata
 DOUBLE_COL = 'DoubleColumnQuantization'
 STR_COL = 'StringColumnQuantization'
 
+def get_dataset(colname, nickname, quantization):
+    print(quantization[colname]['type'])
+    coltype = quantization[colname]['type']
+    
+    if coltype == DOUBLE_COL:
+        min_bound = quantization[colname]['globalMin']
+        max_bound = quantization[colname]['globalMax']
+        granularity = quantization[colname]['granularity']
+        print(min_bound, max_bound, granularity)
+
+        # Instantiate dataset
+        d = dataset.DoubleDatasetFromRaw(nickname=nickname, 
+                                         colnames=[colname],
+                                         bounds=[(min_bound, max_bound, granularity)])
+
+        num_leaves = (int)((max_bound - min_bound) / float(granularity))
+    elif coltype == STR_COL:
+        left_bounds = quantization[colname]['leftBoundaries']
+        # Instantiate dataset
+        d = dataset.StringDatasetFromRaw(nickname=nickname, 
+                                         colnames=[colname],
+                                         left_bounds=(left_bounds,))
+        num_leaves = len(left_bounds)
+    else:
+        raise ValueError("Invalid column type")
+        
+    return (d, num_leaves)
+
 def run_engine(engine, w, x, epsilon, seed):
     start=timer()
     x_hat = engine.Run(w, x, epsilon, seed)
@@ -49,37 +77,14 @@ def main():
             continue
         print(colname)
 
-        #assert(quantization[colname]['type'] == 'DoubleColumnQuantization')
-        print(quantization[colname]['type'])
-        coltype = quantization[colname]['type']
-        
-        if coltype == DOUBLE_COL:
-            min_bound = quantization[colname]['globalMin']
-            max_bound = quantization[colname]['globalMax']
-            granularity = quantization[colname]['granularity']
-            print(min_bound, max_bound, granularity)
-
-            # Instantiate dataset
-            d = dataset.DoubleDatasetFromRaw(nickname=nickname, 
-                                             colnames=[colname],
-                                             bounds=[(min_bound, max_bound, granularity)])
-
-            num_leaves = (int)((max_bound - min_bound) / float(granularity))
-        elif coltype == STR_COL:
-            left_bounds = quantization[colname]['leftBoundaries']
-            # Instantiate dataset
-            d = dataset.StringDatasetFromRaw(nickname=nickname, 
-                                             colnames=[colname],
-                                             left_bounds=(left_bounds,))
-            num_leaves = len(left_bounds)
-            
+        (dataset, num_leaves) = get_dataset(colname, nickname, quantization)
         domain_bounds = ((0, num_leaves),)
 
         # Instantiate workload
         w = workload.AllBuckets(domain_bounds=domain_bounds)
 
         # Calculate noisy estimate for x
-        x = d.payload
+        x = dataset.payload
 
         engines = {
             'H2':HB.H2_engine(),
