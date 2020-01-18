@@ -48,8 +48,6 @@ filenameDict = {
     "ONTIME" : 'ontime_private/2018_1.csv',
     }
 
-
-
 class Dataset(Marshallable):
 
     def __init__(self, hist, reduce_to_domain_shape=None, dist=None):
@@ -219,7 +217,17 @@ class StringDatasetFromRaw(Dataset):
         rows = load_csv(filenameDict[self.fname], colnames)
         hist = string_rows_to_hist(rows, left_bounds)
         super(StringDatasetFromRaw, self).__init__(hist, reduce_to_dom_shape, None)
+
+class MixedDatasetFromRaw(Dataset):
+    def __init__(self, nickname, colnames, left_bounds, bounds_types, reduce_to_dom_shape=None):
+        assert(len(left_bounds) == len(colnames))
         
+        self.fname = nickname
+        assert nickname in filenameDict, 'Filename parameter not recognized: %s' % nickname
+        rows = load_csv(filenameDict[self.fname], colnames)
+        hist = rows_to_nd_hist(rows, left_bounds, bounds_types)
+        super(MixedDatasetFromRaw, self).__init__(hist, reduce_to_dom_shape, None)
+
 '''
 Dummy dataset with zero counts and the specified shape.
 '''
@@ -271,22 +279,35 @@ def double_rows_to_hist(rows, bounds):
     else:
         raise NotImplementedError('Unsupported number of columns for histogram')
 
+def double_row_to_idx(row, bounds):
+    (min_, max_, binsize) = bounds
+    return int((row-min_)//binsize)
+    
 '''
 Find the bin index for this value
 '''
 def binary_search(val, left_bounds):
-    hi = len(left_bounds)
+    (lb, max_val) = left_bounds
+    if val > max_val or val < lb[0]:
+        return -1
+    
+    hi = len(lb) - 1
     lo = 0
+
     while (lo <= hi):
         mid = lo + ((hi - lo) // 2)
-        if val == left_bounds[mid]:
+        if val == lb[mid]:
             return mid
-        if val < left_bounds[mid]:
+        if val < lb[mid]:
             hi = mid - 1
-        elif val > left_bounds[mid]:
+        elif val > lb[mid]:
             lo = mid + 1
-    return -1
-    
+    return mid
+
+def string_row_to_idx(row, left_bounds):
+    idx = binary_search(row, left_bounds)
+    return idx
+
 def string_rows_to_hist(rows, left_bounds):
     if len(left_bounds) == 1:
         lb = left_bounds[0]
@@ -301,7 +322,44 @@ def string_rows_to_hist(rows, left_bounds):
         return ret
     else:
         raise NotImplementedError('Unsupported number of columns for histogram')
-    
+
+def rows_to_nd_hist(rows, left_bounds_arr, bounds_types):
+    if len(left_bounds_arr) > 2:
+        raise NotImplementedError('Unsupported number of columns')
+
+    if len(left_bounds_arr) != len(bounds_types):
+        raise ValueError('Mismatch in bounds lengths')
+
+    dimlens = []
+    for (lb, bt) in zip(left_bounds_arr, bounds_types):
+        if bt == 'DOUBLE':
+            (min_, max_, binsize) = lb
+            nbins = int((max_ - min_) / float(binsize)) + 1
+            dimlens.append(nbins)
+        elif bt == 'STRING':
+            (bounds, max_) = lb
+            dimlens.append(len(bounds))
+        else:
+            raise TypeError('Invalid column type')
+
+    hist = numpy.zeros(dimlens)
+    for r in rows:
+        idxs = []
+        for (x, lb, bt) in zip(r, left_bounds_arr, bounds_types):
+            if bt == 'DOUBLE':
+                idx = double_row_to_idx(x, lb)
+            elif bt == 'STRING':
+                idx = string_row_to_idx(x, lb)
+            else:
+                raise TypeError('Invalid column type')
+            idxs.append(idx)
+        print(idxs)
+        if -1 in idxs: # outside of specified private bounds
+            continue
+        hist[tuple(idxs)] += 1
+
+    return hist
+        
 '''
 Load raw CSV data where each row corresponds to an individual, selecting columns specified by colnames.
 '''
@@ -309,7 +367,7 @@ def load_csv(csv_fname, colnames):
     full_fname = get_path(csv_fname)
     df = pd.read_csv(full_fname, delimiter=',')
     assert(x in df.columns for x in colnames)
-    arr = df[colnames].values
+    arr = df[list(colnames)].values
     return arr
 
 def subSample(dist, sampleSize, prng):
